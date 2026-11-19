@@ -1,5 +1,12 @@
 # The Business Case for Stateless MCP
 
+## TL;DR
+
+- Stateless MCP removes the initialization handshake and protocol-level sessions from the `2026-07-28` request model. A compatible worker can interpret each request on its own.
+- The business case is less session-management work across deployments, scaling, and customer integrations. Savings depend on the service's existing architecture and workload.
+- Application state still needs a home. Jobs, approvals, permissions, and protection against duplicate writes remain application responsibilities.
+- NitroStack supports protocol selection and a compatibility mode. The walkthrough below creates a starter project, adds an order-status tool, and calls it over stateless HTTP.
+
 A single order lookup can serve a support team, a customer's AI assistant, and a fulfillment partner. For the company providing that tool, each connection makes an existing service available in another workflow.
 
 Once customers depend on that tool, its availability becomes part of the product. A failed lookup can interrupt a support conversation or hold up a fulfillment decision. The endpoint needs to handle demand and remain available as the team releases changes.
@@ -77,16 +84,9 @@ The server still has to authenticate the caller, validate the arguments, and che
 
 If two workers share the same configuration and can reach the required data and authorization systems, either can handle the request. Restarting one worker no longer requires restoring an MCP session before the next lookup can proceed.
 
-```mermaid
-flowchart LR
-    C[Agent client] --> L[Load balancer]
-    L --> A[MCP worker A]
-    L --> B[MCP worker B]
-    A --> D[(Orders database)]
-    B --> D
-    A --> P[Authorization checks]
-    B --> P
-```
+![Each MCP request can reach either worker, with both workers using the same orders database and authorization checks](assets/stateless-deployment.png)
+
+[Diagram source](assets/stateless-deployment.mmd) · [SVG](assets/stateless-deployment.svg)
 
 The database and authorization systems remain dependencies. This diagram removes the need to keep the client's protocol session inside a particular worker.
 
@@ -119,6 +119,10 @@ An agent's conversation can remain in its host. Order records remain in the orde
 Human input has a request-and-resume pattern too. With Multi Round-Trip Requests, a supported operation can return `resultType: "input_required"`, describe the input it needs, and optionally include an opaque `requestState`. The client obtains the input and retries the operation with `inputResponses` and the returned state. [Multi Round-Trip Requests](https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/mrtr)
 
 For the refund example, the server could return a confirmation request instead of keeping a handler suspended while someone decides. A later request carries the response.
+
+![An MCP operation requests approval, then a separate request carries the user's response and continuation state to an eligible worker](assets/request-resume.png)
+
+[Diagram source](assets/request-resume.mmd) · [SVG](assets/request-resume.svg)
 
 That separation matters in business workflows where the wait belongs to a person or a process. A manager may respond after a worker has been replaced. The approval should be tied to the operation and its recorded context, so another eligible worker can process the continuation.
 
@@ -167,20 +171,99 @@ Use these measurements to decide whether the migration removes enough work to ju
 
 ## Build a stateless MCP server with NitroStack
 
-NitroStack lets a team define its tools, resources, and prompts in application modules and serve them through MCP. Its documented HTTP protocol modes include `2026-07-28`, legacy support, and an `auto` mode that accepts both generations. This gives a team a framework-supported path for exposing its business capabilities while migrating clients over time. [Protocol configuration](https://docs.nitrostack.ai/docs/getting-started/core-concepts/bootstrap#protocol-version)
+NitroStack provides the tool registration, validation pipeline, and transport integration. This walkthrough adds a fixture-backed order tool to the TypeScript starter, then selects the stateless protocol. Use a NitroStack release that supports `2026-07-28`. [Quickstart](https://docs.nitrostack.ai/docs/getting-started/quickstart), [protocol configuration](https://docs.nitrostack.ai/docs/getting-started/core-concepts/bootstrap#protocol-version)
 
-For a TypeScript project using a NitroStack release that supports the new revision, the documented environment setting can select stateless MCP without changing the tool implementation:
+### 1. Create the project
+
+With Node.js and npm installed, run:
 
 ```bash
+npx @nitrostack/cli init orders-mcp --template typescript-starter
+cd orders-mcp
+```
+
+The CLI scaffolds the project and installs its dependencies. Keep the starter's module registration and bootstrap code.
+
+### 2. Add the order-status tool
+
+Open `src/modules/calculator/calculator.tools.ts`. Inside the existing `CalculatorTools` class, add the method below. The file needs `ToolDecorator as Tool` and `z` from `@nitrostack/core`; retain the starter's other imports and methods.
+
+```typescript
+@Tool({
+  name: 'get_order_status',
+  description: 'Read the status of the sample order ORD-1042.',
+  inputSchema: z.object({
+    orderId: z.literal('ORD-1042'),
+  }).strict(),
+})
+async getOrderStatus(input: { orderId: string }) {
+  return {
+    orderId: input.orderId,
+    status: 'shipped',
+    source: 'demo-fixture',
+  };
+}
+```
+
+This local example returns a fixed record so the transport behavior is easy to inspect. A deployed order tool would obtain its result through an authenticated service that checks the caller's access. The decorator is `ToolDecorator`; the SDK also exports a `Tool` class for programmatic registration.
+
+### 3. Start the HTTP server in stateless mode
+
+```bash
+HOST=127.0.0.1 \
 MCP_TRANSPORT_TYPE=http \
 NITRO_MCP_PROTOCOL_VERSION=2026-07-28 \
 npm start
 ```
 
-This command assumes an existing NitroStack project with its start script configured. `MCP_TRANSPORT_TYPE` chooses the listener; `NITRO_MCP_PROTOCOL_VERSION` chooses the protocol behavior. Setting the latter to `auto` supports migration alongside older clients. The environment setting takes precedence over the application's protocol configuration. [NitroStack HTTP transport configuration](https://docs.nitrostack.ai/docs/guides/dual-transport), [protocol selection and bootstrap options](https://docs.nitrostack.ai/docs/getting-started/core-concepts/bootstrap)
+`MCP_TRANSPORT_TYPE` selects HTTP. `NITRO_MCP_PROTOCOL_VERSION` selects the protocol behavior and takes precedence over the application's protocol setting. For a migration that must accept earlier clients too, use `auto` instead. [HTTP transport configuration](https://docs.nitrostack.ai/docs/guides/dual-transport)
 
-The request pipeline gives the application places to enforce its rules: guards control whether a call may proceed, pipes validate inputs, middleware can record execution, and the handler performs the work. For the order tool, the handler should obtain records through a service that applies the caller's access constraints. [Request lifecycle](https://docs.nitrostack.ai/docs/getting-started/core-concepts/request-lifecycle)
+### 4. Call the tool without opening a session
 
-During development, NitroStudio's Health view shows the protocol revision and advertised capabilities. The HTTP health endpoint also provides transport information. These help check what a deployment is serving before debugging the tool itself. [Transport verification](https://docs.nitrostack.ai/docs/guides/verify-transport)
+In another terminal, save the JSON body from the earlier HTTP example as `order-request.json`. It contains the tool name, order ID, and per-request metadata. A copy is included in this article's [example files](examples/order-request.json).
+
+```bash
+curl --fail-with-body http://127.0.0.1:3000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: tools/call' \
+  -H 'Mcp-Name: get_order_status' \
+  --data-binary @order-request.json
+```
+
+The returned tool result should contain `ORD-1042`, `shipped`, and `demo-fixture`. Its exact JSON-RPC wrapper depends on the SDK's result representation. The local fixture does not configure authentication; the earlier bearer-token header illustrates how a protected deployment carries credentials.
+
+Inspect `http://127.0.0.1:3000/mcp/health` or NitroStudio's Health view to check the served protocol. Then add the authorization and backend access required for your order service. NitroStack's guards, pipes, and middleware provide places for access checks, input validation, and execution instrumentation. [Transport verification](https://docs.nitrostack.ai/docs/guides/verify-transport), [request lifecycle](https://docs.nitrostack.ai/docs/getting-started/core-concepts/request-lifecycle)
 
 The business value is in concentrating protocol and request-pipeline work in the framework while the application team owns the capability customers use. Order records, permissions, job persistence, and protection against duplicate writes remain application responsibilities. With those dependencies available to each worker, the same order-status tool can serve a support workflow, a customer assistant, or a partner integration through an MCP interface.
+
+## Frequently asked questions
+
+### What is a stateless MCP server?
+
+It is a server that can interpret a request without recovering protocol session context established by earlier calls. In the `2026-07-28` revision, each request declares its protocol version and capabilities. Initialization and protocol session IDs are removed from that model.
+
+### Were all earlier MCP servers stateful?
+
+No. Earlier Streamable HTTP revisions allowed servers to omit session IDs. The newer revision goes further by removing the initialization exchange and protocol-level sessions from the core protocol.
+
+### Can a stateless MCP server support jobs and approvals?
+
+Yes. Persist job progress in storage accessible to the workers and pass explicit handles between operations. Multi Round-Trip Requests support requesting input and resuming an operation. Protect continuation state and enforce authorization when the operation resumes.
+
+### Will stateless MCP reduce our infrastructure or model bill?
+
+It can remove session-management work and change how workers are utilized. The effect depends on the existing deployment. It does not change the price of model tokens or the cost of a database query. Compare costs per completed business operation, including retries and failures.
+
+### Does stateless MCP remove streaming?
+
+No. An operation can return a request-scoped SSE response stream. Removing protocol sessions does not require every request to finish immediately or return a single JSON object.
+
+### Can NitroStack support clients on both protocol generations?
+
+Its documented `auto` mode supports the stateless revision alongside legacy behavior. Set `NITRO_MCP_PROTOCOL_VERSION=2026-07-28` to select only the newer protocol. Compatibility mode preserves an earlier client's behavior; it does not silently upgrade that client.
+
+### Is client metadata enough to authorize an order lookup?
+
+No. `clientInfo` is self-reported. Authenticate the caller and enforce access to the requested order. Returning only permitted tool definitions can improve discovery, but a call still needs its own authorization checks.

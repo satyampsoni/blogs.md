@@ -1,0 +1,11 @@
+flowchart TB
+    C[Agent client] --> G[HTTP gateway and load balancer]
+    G --> A[MCP worker A]
+    G --> B[MCP worker B]
+    A --> P[Shared authorization systems]
+    B --> P
+    A --> D[(Orders database)]
+    B --> D
+    N[Each request carries protocol metadata.<br/>Application records remain in shared systems.]:::note
+    G --- N
+    classDef note fill:#fff7ed,stroke:#c2410c,color:#431407

@@ -30,6 +30,18 @@ The selected title reflects the article's business and engineering scope. These 
 
 The intended reader is a product or engineering leader assessing stateless MCP, alongside developers responsible for implementing it. This is an explanatory article with business implications and a configuration example; it is not a complete application-building tutorial or a measured ROI study.
 
+## Article structure
+
+The reader-facing article uses this sequence:
+
+1. TL;DR.
+2. Business motivation and the stateless request model.
+3. Deployment and request/resume diagrams, with an HTTP example.
+4. A NitroStack walkthrough: scaffold the starter, add a fixture-backed tool, select the protocol, and call the endpoint.
+5. Frequently asked questions.
+
+The walkthrough is a local transport example. It does not implement a production order system. The checked-in request JSON and diagram assets belong alongside the article when publishing.
+
 | Topic | Where the article addresses it |
 | --- | --- |
 | Stateless MCP business value | Title, opening, engineering effort, ecosystem, and measurement sections |
@@ -39,7 +51,8 @@ The intended reader is a product or engineering leader assessing stateless MCP, 
 | MCP tool discovery | Dedicated discovery and caching section |
 | MCP scaling and sticky sessions | Opening, deployment diagram, and scaling section |
 | Stateless MCP with application state | Jobs, approvals, and retry behavior |
-| NitroStack stateless MCP configuration | Final section and environment-variable example |
+| NitroStack stateless MCP configuration | Implementation section before the FAQs, with starter commands, a tool method, and an HTTP call |
+| Stateless MCP FAQs | Final FAQ section covering sessions, state, costs, streaming, compatibility, and authorization |
 
 The move from the earlier deployment-focused title and suggested slug is an editorial revision to an unpublished draft, not a live URL migration.
 
@@ -49,7 +62,9 @@ These topic choices come from the article's scope and a qualitative review of se
 
 Set the title, slug, and meta description in the CMS. Keep this settings file out of the reader-facing article. Configure a canonical URL after the actual published address is known. There is no published URL or indexing claim associated with this draft.
 
-Keep the diagram readable on mobile. If it is exported as an image, use alt text such as: “An agent sends MCP requests through a load balancer to two workers that share an orders database and authorization checks.”
+Use the PNG diagrams embedded in the article; SVG and Mermaid sources are included beside them. Keep them readable on mobile and retain their descriptive alt text. The approval diagram shows independent requests and includes continuation verification; it is not an assertion that worker replacement preserves an in-flight execution.
+
+Keep the visible FAQs with the article. Their presence does not imply that Google will display an FAQ rich result.
 
 Retain the documentation links in the NitroStack section. Existing articles on advanced routing and security can link to this article as an explanation of the underlying stateless request model. Do not publish duplicate copies of the article at several URLs.
 

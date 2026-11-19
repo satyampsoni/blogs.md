@@ -1,0 +1,13 @@
+sequenceDiagram
+    actor User
+    participant Client as Agent client
+    participant A as Worker A
+    participant B as Worker B
+    Client->>A: Request a refund operation
+    A-->>Client: input_required, inputRequests, requestState
+    Note over A: Initial request finishes
+    Client->>User: Ask for approval
+    User-->>Client: Approve
+    Client->>B: Retry with inputResponses and requestState
+    Note over B: Verify state, caller, expiry, and operation.<br/>Enforce permission and replay controls.
+    B-->>Client: Operation result

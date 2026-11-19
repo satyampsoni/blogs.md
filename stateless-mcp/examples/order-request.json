@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "order-lookup-1",
+  "method": "tools/call",
+  "params": {
+    "name": "get_order_status",
+    "arguments": {
+      "orderId": "ORD-1042"
+    },
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {},
+      "io.modelcontextprotocol/clientInfo": {
+        "name": "order-assistant",
+        "version": "1.0.0"
+      }
+    }
+  }
+}
