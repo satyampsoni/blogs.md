@@ -1,5 +1,12 @@
 # From tool calls to Code Mode with NitroStack and Grafana
 
+## TL;DR
+
+- Code Mode lets an agent express part of a task as a program that calls application tools, filters results, and returns a selected value.
+- Incident Desk uses four read-only tools and NitroStack's QuickJS sandbox. The canonical investigation makes eight host tool calls inside one execution.
+- Prometheus and Grafana show execution duration, tool activity, failures, and worker pressure. The service records are synthetic; the execution measurements come from the running application.
+- The default investigation runs a reviewed script without an LLM. A model-cost comparison requires a model integration, usage measurements, and a controlled baseline.
+
 You asked a chat assistant how to investigate a checkout failure. It described the steps, and you opened the monitoring tools to carry them out. You chose the queries and pasted the results back into the chat.
 
 Developers connected models to tools so assistants could take action. A model could request an order record or query a database, read the response, and choose its next step. Through that loop, an agent could work through a task on your behalf.
@@ -22,7 +29,7 @@ That kind of work motivated developers to give agents a programming environment 
 
 ## The step toward Code Mode
 
-Researchers explored code as an agent's action interface before Cloudflare's Code Mode announcement. In 2024, CodeAct used executable Python programs to combine actions and respond to results. In September 2025, Cloudflare introduced its Code Mode approach for MCP, exposing capabilities through a programming interface that the model could use from generated code. Anthropic explored a related approach to code execution with MCP that November.
+Researchers explored code as an agent's action interface before Cloudflare's Code Mode announcement. In 2024, [CodeAct](https://proceedings.mlr.press/v235/wang24h.html) used executable Python programs to combine actions and respond to results. [Cloudflare introduced Code Mode](https://blog.cloudflare.com/code-mode/) for MCP in September 2025, and [Anthropic explored code execution with MCP](https://www.anthropic.com/research/code-execution-with-mcp) that November.
 
 The assistant could write a program for part of its assignment. That program could use a tool's result in a calculation and choose another operation without returning to the model for each decision.
 
@@ -92,7 +99,7 @@ Here, `0.06` means a 6% error rate. The program examines three services and requ
 
 This [runnable example](examples/code-mode-investigation.js) uses a short investigation rule to expose the control flow. The project's [complete workflow](https://github.com/satyampsoni/incident-desk/blob/dc29e52af059c0cb061fb72a227facb8960d5b4c/workflows/triage.js) adds latency checks and severity thresholds, and returns evidence for an engineer to inspect.
 
-## Less information for the model to carry
+## The business value of moving coordination into code
 
 An agent spends part of its available context on tool descriptions. Context is the information the model can work with during a request. A large catalog can consume a substantial share before the agent begins the user's task. Discovering the tools it needs can reduce that initial load.
 
@@ -104,6 +111,8 @@ Direct tool calling supports batching for independent operations. Code Mode exte
 
 The execution environment takes time and resources. To assess the approach in an application, you need to measure the work it performs.
 
+For a product team, the useful outcome is completing the same investigation with a procedure it can inspect, bound, and repeat. Returning selected fields may also reduce what the model has to process. That becomes a cost benefit only when the application's measurements show it; fewer model turns can still involve the same backend operations.
+
 ## Bringing Grafana into the test
 
 You need more than a completed answer to assess execution behavior. You need to see how long runs take, which tool operations consume time, and whether the application can accept incoming work.
@@ -114,7 +123,7 @@ Compare waiting work with execution time to distinguish a capacity problem from 
 
 For this project, we use Grafana to examine Code Mode execution inside the application. A comparison of model cost or token usage would need provider-usage measurements alongside these runtime graphs.
 
-## Putting NitroStack Code Mode under observation
+## Build and observe Code Mode with NitroStack
 
 NitroStack includes Code Mode in its MCP framework. Developers define the tools their application provides and enable Code Mode so an assistant can coordinate them through JavaScript.
 
@@ -136,7 +145,67 @@ We use a reviewed program for the default run so we can repeat the procedure whi
 
 One submitted program can contain several timed tool calls. We record the duration of the whole execution and the time spent in individual tool handlers. Prometheus collects those measurements so we can examine both levels in Grafana.
 
-## Reading the executions in Grafana
+### 1. Configure the execution boundary
+
+The base SDK configuration for this example uses two workers, a three-second timeout, a 64 MiB sandbox memory limit, and a 24-call budget:
+
+```typescript
+import { CodeModeTransform, NitroStackServer } from '@nitrostack/core';
+
+const codeMode = new CodeModeTransform({
+  workerPoolSize: 2,
+  timeoutMs: 3000,
+  memoryLimitMb: 64,
+  maxToolCalls: 24,
+  allowDestructive: false,
+});
+
+const server = new NitroStackServer({
+  name: 'incident-desk',
+  version: '0.1.0',
+  transforms: [codeMode],
+});
+```
+
+This shows the core configuration, not the complete application. Incident Desk extends the transform to record executions and applies a separate maximum of four admitted runs, counting both running and waiting work. The [runtime](https://github.com/satyampsoni/incident-desk/blob/dc29e52af059c0cb061fb72a227facb8960d5b4c/src/runtime.ts) registers and instruments the four host tools.
+
+Those limits constrain guest execution. Access to business systems is still determined by the registered host handlers. The sample handlers read a fixed service snapshot.
+
+### 2. Run the application and monitoring stack
+
+The [Incident Desk repository](https://github.com/satyampsoni/incident-desk) includes the application, Prometheus configuration, and a provisioned Grafana dashboard. With Docker Compose available:
+
+```bash
+git clone https://github.com/satyampsoni/incident-desk.git
+cd incident-desk
+docker compose up -d --build
+```
+
+Then submit the reviewed investigation:
+
+```bash
+curl --fail-with-body http://127.0.0.1:4310/api/investigate \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```
+
+The full workflow returns checkout as critical and inventory as watch, and omits payments from its findings. A nearby deployment is evidence to investigate; the example does not establish that the deployment caused the errors.
+
+### 3. Generate activity for the dashboard
+
+The helper script requires Node.js 22 or 24. From the application directory:
+
+```bash
+npm ci
+npm run demo -- --traffic --include-failures --count 60
+```
+
+The generator mixes investigations with smaller programs and intentional failures. It exercises the runtime rather than measuring model reasoning. Prometheus scrapes every five seconds, so allow multiple scrapes before interpreting rate and quantile panels.
+
+Open [the Grafana dashboard](http://127.0.0.1:4311/d/incident-desk). For installation details and the disposable Compose variant, use the application's [README](https://github.com/satyampsoni/incident-desk/blob/dc29e52af059c0cb061fb72a227facb8960d5b4c/README.md).
+
+### 4. Read the measurements alongside the findings
+
 
 Start with the completed-run count and success rate. They show how much work has finished and the proportion that completed without an execution error. The calls-per-run panel helps you check how much tool activity each submitted program produced.
 
@@ -156,16 +225,57 @@ The lower dashboard section contains the service comparisons and findings for th
 
 You can examine the evidence in the report and inspect the execution that produced it. The panel labels distinguish the example service values from measurements of the Code Mode runtime.
 
-## Run the workload and watch the graphs
+For example, this PromQL expression estimates p95 duration for the canonical triage workflow over a five-minute window:
 
-The [Incident Desk repository](https://github.com/satyampsoni/incident-desk) includes the NitroStack application and monitoring configuration. From the project directory, with Docker and Node.js 22 or 24 available, run:
-
-```bash
-docker compose up -d --build
-npm ci
-npm run demo -- --traffic --include-failures --count 60
+```promql
+histogram_quantile(
+  0.95,
+  sum by (le) (
+    rate(incident_desk_run_duration_seconds_bucket{workflow="triage"}[5m])
+  )
+)
 ```
 
-Open [Grafana](http://127.0.0.1:4311/d/incident-desk) while the generator runs. Compare duration with tool activity and inspect the errors the test scripts produce. The [README](https://github.com/satyampsoni/incident-desk/blob/dc29e52af059c0cb061fb72a227facb8960d5b4c/README.md) explains configuration and MCP access; the [decision record](https://github.com/satyampsoni/incident-desk/blob/dc29e52af059c0cb061fb72a227facb8960d5b4c/DECISIONS.md) covers the engineering choices and limitations.
+The histogram includes sandbox queue wait. It needs recent observations, and its quantile is an estimate based on the configured buckets. Filtering to one workflow avoids combining the canonical investigation with smaller custom programs.
 
-For your own workflow, establish an expected result and run the same procedure several times. Change one part of the workload or configuration and compare its effect. Keep the tasks and success criteria consistent if you compare Code Mode with direct tool calling. Use those results to decide whether Code Mode suits the workload you plan to ship.
+The telemetry path is:
+
+![NitroStack execution and host-tool measurements reach Grafana through the application metrics endpoint and Prometheus](assets/execution-telemetry.png)
+
+[Diagram source](assets/execution-telemetry.mmd) · [SVG](assets/execution-telemetry.svg)
+
+### 5. Connect an AI client when testing generated programs
+
+To let a model choose and write a workflow, connect an MCP client using the application's [stdio instructions](https://github.com/satyampsoni/incident-desk/blob/dc29e52af059c0cb061fb72a227facb8960d5b4c/README.md#local-development-and-mcp). That starts a separate process. Add its metrics endpoint as a Prometheus scrape target if you want Grafana to observe that process; the default dashboard targets the container application.
+
+For a comparison with direct tool calling, keep the task, model, data, and success criteria consistent. Record provider usage as well as runtime measurements. The [decision record](https://github.com/satyampsoni/incident-desk/blob/dc29e52af059c0cb061fb72a227facb8960d5b4c/DECISIONS.md) explains the example's boundaries.
+
+## Frequently asked questions
+
+### What is Code Mode?
+
+It is an approach where an agent writes a program to coordinate tools. The program can loop over results, perform calculations, and choose dependent operations before returning a value to the model.
+
+### Does one Code Mode execution mean one backend call?
+
+No. The example makes eight host tool calls inside one execution. Moving coordination into code can change the interaction with the model while preserving the underlying work needed to answer the question.
+
+### Does Code Mode always cost less than direct tool calling?
+
+No. The runtime has overhead, and a direct client can already batch independent operations. Compare representative tasks, their success rates, total duration, provider usage, and backend activity before making a cost claim.
+
+### Do I need an LLM key to run Incident Desk?
+
+No. The default investigation submits a reviewed program. An AI client is needed when you want a model to discover tools and generate a program. Those are different ways of entering the same execution pipeline.
+
+### Are the Grafana charts showing production incidents?
+
+The incident data is a fixed synthetic snapshot. Execution duration, tool calls, failures, and runtime metrics come from actual application runs. The dashboard labels the evidence and runtime sections separately.
+
+### Does Grafana establish that an agent's answer is correct?
+
+No. It displays the measurements you provide. Execution success means the program completed without an execution error. Correctness requires expected results, application tests, or task-level evaluations in addition to runtime monitoring.
+
+### What can a guest program access?
+
+In this example, it can call the four registered read-only tools through `callTool`. It has no direct Node.js filesystem, process, or network APIs. Host tools define the reachable systems, so their authorization, input validation, and resource limits remain part of the application design.

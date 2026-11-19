@@ -1,0 +1,7 @@
+flowchart TB
+    H[HTTP caller or MCP client] --> E[NitroStack Code Mode execution]
+    E --> T[Instrumented host tools]
+    E --> M[Application metrics endpoint]
+    T --> M
+    M --> P[Prometheus scrape]
+    P --> G[Grafana dashboard]
