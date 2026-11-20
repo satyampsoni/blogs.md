@@ -1,0 +1,8 @@
+flowchart LR
+    H[Assistant host<br/>Self-contained request] --> G[HTTP gateway<br/>Route and meter by MCP headers]
+    G --> A[MCP worker A<br/>Validate metadata and access]
+    G --> B[MCP worker B<br/>Validate metadata and access]
+    A --> P[Report service<br/>Authorized jobs and results]
+    B --> P
+    P --> D[(Durable business state)]
+    N[No protocol session owner<br/>Each worker has the same contracts] -.-> G

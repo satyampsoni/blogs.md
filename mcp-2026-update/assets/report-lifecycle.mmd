@@ -1,0 +1,21 @@
+sequenceDiagram
+    actor U as Support lead
+    participant H as Assistant host
+    participant M as MCP endpoint
+    participant J as Durable report service
+    U->>H: Find delayed orders
+    H->>M: tools/call with per-request capabilities
+    M-->>H: input_required with report_window
+    H->>U: Ask for date range
+    U-->>H: Submit dates
+    H->>M: New request ID, inputResponses, echoed state
+    M->>M: Validate caller, state, and dates
+    M->>J: Create or recover the authorized operation
+    J-->>M: Durable job record
+    M-->>H: Task handle through negotiated extension
+    Note over H,J: Client saves the handle and the job survives reconnect
+    H->>M: tasks/get with the saved handle
+    M->>J: Check access and read current state
+    J-->>M: Status or completed report
+    M-->>H: Task status with result when complete
+    H-->>U: Show report, optionally with an MCP App

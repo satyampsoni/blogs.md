@@ -1,0 +1,32 @@
+{
+  "jsonrpc": "2.0",
+  "id": "report-2",
+  "method": "tools/call",
+  "params": {
+    "name": "report_delayed_orders",
+    "arguments": {
+      "operationId": "report-operation-42"
+    },
+    "requestState": "opaque-server-issued-continuation",
+    "inputResponses": {
+      "report_window": {
+        "action": "accept",
+        "content": {
+          "startDate": "2026-11-01",
+          "endDate": "2026-11-15"
+        }
+      }
+    },
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientInfo": {
+        "name": "support-assistant",
+        "version": "1.0.0"
+      },
+      "io.modelcontextprotocol/clientCapabilities": {
+        "elicitation": { "form": {} },
+        "extensions": { "io.modelcontextprotocol/tasks": {} }
+      }
+    }
+  }
+}

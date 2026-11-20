@@ -1,0 +1,8 @@
+flowchart TB
+    W[Delayed-orders workflow] --> H[Assistant host<br/>Conversation and saved handles]
+    W --> R[MCP request<br/>Version, capabilities, and input]
+    W --> S[Application services<br/>Persistent business state]
+    S --> J[(Jobs and result retention)]
+    S --> A[(Authorization and approval records)]
+    S --> I[(Operation keys and duplicate prevention)]
+    R --> N[Requests do not inherit<br/>a previous protocol session]

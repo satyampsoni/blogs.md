@@ -1,0 +1,25 @@
+{
+  "jsonrpc": "2.0",
+  "id": "report-1",
+  "result": {
+    "resultType": "input_required",
+    "inputRequests": {
+      "report_window": {
+        "method": "elicitation/create",
+        "params": {
+          "mode": "form",
+          "message": "Which date range should the delayed-orders report cover?",
+          "requestedSchema": {
+            "type": "object",
+            "properties": {
+              "startDate": { "type": "string", "format": "date" },
+              "endDate": { "type": "string", "format": "date" }
+            },
+            "required": ["startDate", "endDate"]
+          }
+        }
+      }
+    },
+    "requestState": "opaque-server-issued-continuation"
+  }
+}

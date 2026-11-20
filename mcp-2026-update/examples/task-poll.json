@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "report-status-1",
+  "method": "tasks/get",
+  "params": {
+    "taskId": "task-issued-by-server",
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientInfo": {
+        "name": "support-assistant",
+        "version": "1.0.0"
+      },
+      "io.modelcontextprotocol/clientCapabilities": {
+        "elicitation": { "form": {} },
+        "extensions": { "io.modelcontextprotocol/tasks": {} }
+      }
+    }
+  }
+}
