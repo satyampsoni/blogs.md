@@ -1,4 +1,4 @@
-# MCP 2026 Update Explained for Production AI Agents
+# MCP 2.0 Is Here: What Changed in the Model Context Protocol
 
 ## TL;DR
 

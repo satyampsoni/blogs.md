@@ -2,15 +2,15 @@
 
 ## Page title and H1
 
-MCP 2026 Update Explained for Production AI Agents
+MCP 2.0 Is Here: What Changed in the Model Context Protocol
 
 ## Suggested URL slug
 
-`mcp-2026-update-production-ai-agents`
+`mcp-2-0-model-context-protocol-update`
 
 ## Meta description
 
-Understand the MCP 2026 update through stateless requests, MRTR, Tasks, caching, OAuth changes, and a NitroStack workflow for production AI agents.
+Explore the 2026-07-28 Model Context Protocol update, from stateless requests and Tasks to caching, OAuth, and building with NitroStack.
 
 ## Article excerpt
 

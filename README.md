@@ -9,7 +9,7 @@ Each article opens with a TL;DR, explains the subject with diagrams and code, wa
 | [The Business Case for Stateless MCP](stateless-mcp/README.md) | Delivery, operating costs, protocol changes, integrations, and NitroStack configuration |
 | [From tool calls to Code Mode with NitroStack and Grafana](code-mode-grafana/README.md) | Programmatic tool execution, sandboxing, Prometheus metrics, and Grafana dashboards |
 | [How to Build an Enterprise AI Assistant for Production](enterprise-ai-assistant/README.md) | RAG, MCP tools, authorization, rate limiting, concurrency, retries, observability, and evaluations |
-| [MCP 2026 Update Explained for Production AI Agents](mcp-2026-update/README.md) | Stateless requests, HTTP routing, MRTR, Tasks, Apps, Skills, caching, OAuth, and migration |
+| [MCP 2.0 Is Here: What Changed in the Model Context Protocol](mcp-2026-update/README.md) | Stateless requests, HTTP routing, MRTR, Tasks, Apps, Skills, caching, OAuth, and migration |
 
 Each article includes publishing settings for its title, description, and URL slug: [stateless MCP](stateless-mcp/PUBLISHING.md), [Code Mode with Grafana](code-mode-grafana/PUBLISHING.md), [the company AI assistant](enterprise-ai-assistant/PUBLISHING.md), and [the MCP 2026 update](mcp-2026-update/PUBLISHING.md).
 
