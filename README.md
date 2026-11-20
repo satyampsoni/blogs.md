@@ -8,7 +8,8 @@ Each article opens with a TL;DR, explains the subject with diagrams and code, wa
 | --- | --- |
 | [The Business Case for Stateless MCP](stateless-mcp/README.md) | Delivery, operating costs, protocol changes, integrations, and NitroStack configuration |
 | [From tool calls to Code Mode with NitroStack and Grafana](code-mode-grafana/README.md) | Programmatic tool execution, sandboxing, Prometheus metrics, and Grafana dashboards |
+| [What It Takes to Build a Company AI Assistant](enterprise-ai-assistant/README.md) | Prompts, RAG, MCP tools, authorization, guardrails, caching, routing, observability, and evaluations |
 
-Both articles include publishing settings for their title, description, and URL slug: [stateless MCP](stateless-mcp/PUBLISHING.md) and [Code Mode with Grafana](code-mode-grafana/PUBLISHING.md).
+Each article includes publishing settings for its title, description, and URL slug: [stateless MCP](stateless-mcp/PUBLISHING.md), [Code Mode with Grafana](code-mode-grafana/PUBLISHING.md), and [the company AI assistant](enterprise-ai-assistant/PUBLISHING.md).
 
 The Code Mode article includes its diagrams, dashboard screenshots, and a [workflow example](code-mode-grafana/examples/code-mode-investigation.js). The application and monitoring configuration live in [Incident Desk](https://github.com/satyampsoni/incident-desk).

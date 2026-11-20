@@ -1,0 +1,15 @@
+flowchart TB
+    U[Employee] --> G[Application gateway<br/>Verify identity and session]
+    G --> R[Assistant runtime<br/>Task state and execution budgets]
+    R --> M[Model routing and generation]
+    M --> R
+    R --> K[Retrieval<br/>Apply permissions and source versions]
+    K --> D[(Company knowledge)]
+    R --> C[Response cache<br/>Check scope, eligibility, and freshness]
+    R --> T[MCP tool boundary<br/>Validate, authorize, and verify approval]
+    T --> B[HR and IT services<br/>Enforce resource access and idempotency]
+    R --> O[Output checks and response]
+    O --> U
+    V[Evaluations and release gates<br/>Version prompts, tools, policies, and routing] -.-> R
+    R -.-> A[Traces, logs, metrics, and audit records]
+    T -.-> A

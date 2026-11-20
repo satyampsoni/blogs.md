@@ -1,0 +1,10 @@
+flowchart LR
+    S[System prompt<br/>Role and response behavior] --> R[Assistant runtime]
+    C[Conversation context<br/>The current employee task] --> R
+    D[Permitted policy passages<br/>Source and effective version] --> R
+    T[Authorized tool results<br/>Current business records] --> R
+    R --> M[LLM]
+    M --> A[Proposed answer or tool operation]
+    N[Context supplies information.<br/>Application code enforces authority.]:::note
+    R --- N
+    classDef note fill:#fff7ed,stroke:#c2410c,color:#431407

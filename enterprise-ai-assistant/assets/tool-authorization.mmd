@@ -1,0 +1,19 @@
+sequenceDiagram
+    actor Employee as Employee
+    participant Host as Assistant host
+    participant Model as LLM
+    participant MCP as MCP server
+    participant Policy as Access policy
+    Employee->>Host: Ask for the CEO salary
+    Note over Host: Verified employee login with intern access
+    Host->>Model: Task and permitted tool definitions
+    Model-->>Host: Propose a compensation query
+    Host->>MCP: Call with employee authority
+    MCP->>Policy: Check caller, action, and record
+    Policy-->>MCP: Deny
+    Note over MCP: No protected salary data is read
+    MCP-->>Host: Access denied
+    Host->>Model: Denied tool result
+    Model-->>Host: Proposed response to the denied operation
+    Note over Host: Apply response policy checks
+    Host-->>Employee: Return a permitted explanation
