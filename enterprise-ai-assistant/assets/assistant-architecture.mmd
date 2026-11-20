@@ -1,6 +1,6 @@
 flowchart TB
-    U[Employee] --> G[Application gateway<br/>Verify identity and session]
-    G --> R[Assistant runtime<br/>Task state and execution budgets]
+    U[Employee] --> G[Application gateway<br/>Verify identity and apply rate limits]
+    G --> R[Assistant runtime<br/>Task state, deadlines, and budgets]
     R --> M[Model routing and generation]
     M --> R
     R --> K[Retrieval<br/>Apply permissions and source versions]

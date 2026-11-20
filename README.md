@@ -8,7 +8,7 @@ Each article opens with a TL;DR, explains the subject with diagrams and code, wa
 | --- | --- |
 | [The Business Case for Stateless MCP](stateless-mcp/README.md) | Delivery, operating costs, protocol changes, integrations, and NitroStack configuration |
 | [From tool calls to Code Mode with NitroStack and Grafana](code-mode-grafana/README.md) | Programmatic tool execution, sandboxing, Prometheus metrics, and Grafana dashboards |
-| [What It Takes to Build a Company AI Assistant](enterprise-ai-assistant/README.md) | Prompts, RAG, MCP tools, authorization, guardrails, caching, routing, observability, and evaluations |
+| [How to Build an Enterprise AI Assistant for Production](enterprise-ai-assistant/README.md) | RAG, MCP tools, authorization, rate limiting, concurrency, retries, observability, and evaluations |
 
 Each article includes publishing settings for its title, description, and URL slug: [stateless MCP](stateless-mcp/PUBLISHING.md), [Code Mode with Grafana](code-mode-grafana/PUBLISHING.md), and [the company AI assistant](enterprise-ai-assistant/PUBLISHING.md).
 

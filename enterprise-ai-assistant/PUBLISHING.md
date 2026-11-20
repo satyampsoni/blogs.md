@@ -2,19 +2,19 @@
 
 ## Page title and H1
 
-What It Takes to Build a Company AI Assistant
+How to Build an Enterprise AI Assistant for Production
 
 ## Suggested URL slug
 
-`building-company-ai-assistant`
+`build-enterprise-ai-assistant`
 
 ## Meta description
 
-Build a company AI assistant through prompts, RAG, MCP tools, authorization, guardrails, caching, model routing, observability, and release evaluations.
+Learn how to build an enterprise AI assistant with RAG, MCP tools, access controls, rate limiting, retries, observability, and production evaluations.
 
 ## Article excerpt
 
-An employee assistant begins with an LLM API. Each new request exposes another responsibility: company knowledge, business actions, permissions, cost, and change control. Follow the architecture as it develops, with diagrams, an authorization-boundary example, and FAQs.
+An employee assistant begins with an LLM API. Each new request exposes another responsibility: company knowledge, business actions, permissions, cost, capacity, and change control. Follow its path into production through RAG, MCP tools, rate limiting, timeouts, observability, and evaluations, with diagrams, code, and FAQs.
 
 ## Structure and audience
 
@@ -36,6 +36,8 @@ The diagrams have PNG images for publishing, with SVG and Mermaid sources. Retai
 - The TypeScript example defines an application boundary through injected interfaces. It does not implement OAuth, a policy engine, an approval service, or HR storage. Its adapters must meet the documented contracts.
 - The HR backend owns atomic idempotency, including retries and concurrency. The example does not supply a transaction across services.
 - NitroStack supplies the MCP tool/application layer; the other services remain application integrations.
+- Tool call-count limits, gateway admission, provider token budgets, concurrency, and task deadlines protect different resources. NitroStack's default rate-limit counters are per process; shared quotas require coordinated storage with atomic accounting.
+- A timeout can leave a write outcome unknown. Cancellation and retries do not reverse a completed business operation; preserve operation identifiers and reconcile through the backend contract.
 
 ## Publishing
 

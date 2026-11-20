@@ -1,4 +1,4 @@
-# What It Takes to Build a Company AI Assistant
+# How to Build an Enterprise AI Assistant for Production
 
 ## TL;DR
 
@@ -6,6 +6,7 @@
 - Access control belongs in retrieval, application code, and downstream systems. The model's instructions cannot decide who may read a salary record or submit a request.
 - Guardrails help detect misuse, but they do not make prompt injection disappear. Authorization and approval checks must hold even when the model follows an attacker’s instructions.
 - Caching and model routing can change operating costs, provided they preserve user permissions, freshness, and task quality.
+- Production traffic needs rate limits, concurrency limits, task budgets, and deadlines. Retries must be bounded and safe for the operation being repeated.
 - Traces, evaluations, versioned configuration, and release gates turn a collection of integrations into a system a team can operate. A prompt change belongs in that release process too.
 
 Your company wants an assistant that answers policy questions, submits leave requests, and opens IT tickets. You connect a chat interface to an LLM API and put it in front of a few employees.
@@ -18,7 +19,7 @@ Then someone asks about the leave policy.
 
 The assistant returns an answer with the confidence of an HR handbook and the accuracy of a guess. It has described a plausible workplace policy, including benefits your company has never offered.
 
-The API connection works. The company knowledge is missing. Fixing that gap starts a sequence of engineering decisions, each exposed by a new thing employees expect the assistant to do.
+The API connection works. The company knowledge is missing. Taking an enterprise AI assistant into production starts a sequence of engineering decisions, each exposed by a new thing employees expect it to do.
 
 ## A system prompt gives the assistant a role
 
@@ -136,19 +137,55 @@ Use shared caching for answers whose content and access are genuinely shared. Tr
 
 The goal is cost per completed task within the required quality and access boundaries. Cache hit rate alone cannot establish that the optimization is working.
 
-The bill becomes easier to explain. Then an employee reports that the assistant cited a policy that no longer applies, and the team needs to find the path that produced the answer.
+The bill becomes easier to explain. Then Monday morning arrives, employees open the assistant together, and the HR service starts taking longer to respond.
+
+## Rate limiting and timeouts keep the assistant available
+
+The pilot spread requests across the day. The company launch concentrates them into the same few minutes. Some employees repeat a question because the first answer has not arrived. A slow HR call holds a connection open, and retries add more work to the queue.
+
+You add rate limiting before expensive work begins. An edge limit can reduce unauthenticated abuse; after authentication, limits keyed by verified employee and tenant identities control admitted work. A shared provider budget accounts for model capacity used across the application. A name or organization supplied in the prompt cannot choose which quota is charged.
+
+Counting chat messages is insufficient. One message might produce a short answer; another might trigger several model turns, searches, and tool calls. Apply limits to the resources that can run out, including model requests, tokens, and active downstream operations. Check the provider's actual quota rules rather than assuming every model has the same requests-per-minute allowance. [Model throughput planning](https://docs.aws.amazon.com/bedrock/latest/userguide/scaling-throughput-best-practices.html)
+
+Rate limits control how much work starts over time. Concurrency limits control how much remains active at once. You need both: a request rate that worked yesterday can exhaust connections today if the HR system becomes slower. Give HR calls their own concurrency allowance so they cannot occupy every worker needed for IT requests or policy answers.
+
+The controls serve different purposes:
+
+| Control | Where it applies | What it protects |
+| --- | --- | --- |
+| Employee and tenant rate limits | Authenticated request admission | Fair access when one caller or team sends a burst |
+| Model request and token budgets | Before each generation call | Shared provider capacity and the task's spending allowance |
+| Tool concurrency limits | Each downstream integration | Connections and worker capacity when a dependency slows |
+| Queue size and waiting deadline | Work waiting for execution | Memory and the employee's remaining response time |
+| Step and tool-call budgets | The agent's execution loop | Repeated planning, retries, or calls that stop making progress |
+
+Keep queues bounded. When capacity is exhausted, reject or defer work explicitly instead of accepting requests that cannot finish within their deadline. At an HTTP admission boundary, `429 Too Many Requests` can explain that a caller has exceeded a rate limit, with `Retry-After` where a retry delay is known. A tool-level failure also needs a structured outcome the host can handle; do not depend on the model deciding to wait. [HTTP rate-limit responses](https://www.rfc-editor.org/rfc/rfc6585#section-4)
+
+If the assistant runs across several replicas, per-process counters do not enforce one application-wide quota. Coordinate admission through a gateway or shared limiter with atomic accounting. Define what happens if that limiter is unavailable. Keep interactive requests separate from background jobs where they compete for the same capacity, and pause failing integrations when continued calls cannot help. This is load shedding: declining some work so the service can keep completing the work it can support. [Handling overload](https://sre.google/sre-book/handling-overload/)
+
+Give the whole task a deadline, then allocate dependency timeouts within the remaining time. Include queueing, connection setup, model generation, and tool calls. A new retry does not reset the employee's deadline. Propagate cancellation where supported and stop scheduling new work when the task expires. [Deadline propagation](https://grpc.io/docs/guides/deadlines/)
+
+Also cap model turns, tool calls, and token use so an agent cannot keep trying indefinitely. Check those budgets in the host before scheduling each new step, including a retry or a fallback to another model.
+
+A retry is appropriate only when another attempt may help and repeating the operation is safe. Bound the attempts, space them with exponential backoff and jitter, and honor an applicable `Retry-After` response. Assign retry responsibility to one layer so host, tool client, and SDK retries do not multiply each other. Permission denials and invalid arguments need correction rather than another identical attempt. [Timeouts and retry behavior](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/)
+
+For a leave submission, a timeout does not prove the HR system rejected the request. It may have stored the record before the response was lost. Use the same operation identifier when reconciling or safely retrying that submission; the backend must prevent a second record. Until its status is known, tell the employee that confirmation is pending. Do not invite another submission with a new identifier.
+
+Choose thresholds through load tests that include bursts, slow dependencies, and realistic task lengths. Define service-level objectives for response time and completed workflows, then measure admitted, rejected, timed-out, and completed requests separately. Otherwise, fast rejections can make the latency chart look healthy while employees cannot get work done.
+
+The assistant now has a defined response when demand exceeds capacity. Then an employee reports that it cited a policy that no longer applies, and the team needs to find the path that produced the answer.
 
 ## Observability explains the path to an answer
 
 An HTTP success code says little about whether the assistant used the right policy or completed the intended operation. You need a record of the request as it moved through routing, retrieval, generation, and tools.
 
-Give the request a correlation identifier. Record the application and prompt versions, selected model, retrieved source identifiers and versions, tool names, authorization outcomes, durations, retries, and final workflow status. Add provider usage where available so the cost of the complete task can be reconstructed.
+Give the request a correlation identifier. Record the application and prompt versions, selected model, retrieved source identifiers and versions, tool names, authorization outcomes, durations, retries, and final workflow status. Add provider usage where available so the cost of the complete task can be reconstructed. Include queue wait, active tool calls, throttling, deadline expiry, and exhausted task budgets to distinguish demand from dependency failure.
 
 This makes failures more specific. A policy answer may have used an old document, a stale cache entry, or an incorrect interpretation of the current policy. Those require different fixes. A slow leave request may be waiting on the HR service rather than the model.
 
 Full prompt and response logging is a separate data decision. Employee questions can contain health information, compensation details, or credentials pasted by mistake. Collect the diagnostic metadata needed for the task, redact or restrict content where necessary, and set access and retention rules for the logs themselves. [OWASP logging guidance](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)
 
-Keep request identifiers and detailed records in logs or traces. Metrics should summarize durations, failures, resource pressure, and cost without creating a new time series for every employee interaction. The [Code Mode and Grafana article](../code-mode-grafana/README.md) shows how execution measurements can be examined alongside tool activity.
+Keep request identifiers and detailed records in logs or traces. Metrics should summarize durations, failures, resource pressure, and cost without creating a new time series for every employee interaction. A Grafana dashboard can place request rate, rejection rate, queue wait, active calls, latency percentiles, and workflow completion beside one another. That makes a traffic burst distinguishable from a slow HR dependency. The [Code Mode and Grafana article](../code-mode-grafana/README.md) shows how execution measurements can be examined alongside tool activity.
 
 Now the team can investigate a bad answer. It also needs a way to catch a regression before employees encounter it.
 
@@ -168,6 +205,9 @@ For the employee assistant, the collection should include situations such as the
 | Employee approves one leave request | The executed operation matches the confirmed employee, dates, and other parameters |
 | HR accepts a request but the response is lost | A retry does not create a duplicate leave record |
 | A routing rule selects another model | The task still meets the defined behavior, latency, and cost requirements |
+| A tenant exceeds its quota during a traffic burst | Excess work is rejected or deferred according to policy while other tenants retain their allocation |
+| HR calls become slow or time out | Concurrency and queueing stay bounded; the assistant reports an unresolved operation without inventing success |
+| A task reaches its deadline or tool-call budget | The host stops scheduling new work and reports the current outcome |
 
 Use deterministic assertions for facts such as authorized scope, identifiers, recorded side effects, and duplicate prevention. Human review or model-based graders can help assess language and explanation quality, but should not be the only judge of whether a protected operation was allowed.
 
@@ -175,7 +215,7 @@ Version the configuration involved in a release: prompts, model selection, retri
 
 Run relevant evaluations on changes, use a controlled rollout, and retain a way to restore the previous configuration. Offline results do not cover every future input; production feedback should supply new cases to test.
 
-![An employee assistant runtime coordinates permitted knowledge, authorized tools, model routing, scoped caching, and output checks, with telemetry and evaluated configuration releases](assets/assistant-architecture.png)
+![An enterprise AI assistant applies identity and rate limits at admission, task deadlines and budgets in its runtime, and authorization at its tools, with telemetry and evaluated releases](assets/assistant-architecture.png)
 
 [Diagram source](assets/assistant-architecture.mmd) · [SVG](assets/assistant-architecture.svg)
 
@@ -228,6 +268,10 @@ Notice that the model does not supply the caller's identity, declare its own rol
 
 Group HR, IT, and communication tools according to their access policies, and test them in NitroStudio or an MCP client under the roles that will use them. Check both permitted and denied operations. Tool discovery can help a client find capabilities, but every call still needs enforcement at execution time.
 
+NitroStack's `@RateLimit` decorator adds a call-count limit to an individual tool. Its options include `requests`, `window`, `key`, and `storage`; the key can use authenticated context to scope the counter. The default uses the authenticated subject, or a shared `anonymous` key when no authenticated subject is present. Set a key that includes verified tenant and caller identity when those scopes are needed. Counters are also namespaced by tool, so a tool limit does not establish one quota across the whole assistant. [NitroStack rate limiting](https://docs.nitrostack.ai/docs/sdk/rate-limiting), [rate-limit keys](https://docs.nitrostack.ai/docs/sdk/rate-limiting/keys)
+
+The default storage is in memory within one server process. For a quota shared across replicas, supply a shared `RateLimitStorage` adapter and make its increment and window expiry atomic. Keep gateway admission, provider token budgets, and downstream concurrency controls at the layers that can coordinate those resources. A tool decorator counts calls; it does not replace those controls. [Rate-limit storage](https://docs.nitrostack.ai/docs/sdk/rate-limiting/storage)
+
 Leave company knowledge, cache eligibility, model routing, and evaluation in the services that own those decisions. NitroStack provides the tool boundary within that architecture; the application team connects it to the identity provider, policy engine, approval store, and business systems.
 
 ## Frequently asked questions
@@ -264,10 +308,22 @@ No. A semantic response cache returns a previously generated answer for a suffic
 
 Evaluate candidates on the actual task categories, including tool selection, schema adherence, source use, and completion outcomes. Measure cost per successful task with retries and fallbacks included. Keep the same access and approval controls regardless of which model is selected.
 
+### Where should we apply rate limiting to an AI assistant?
+
+Limit incoming traffic at the gateway, apply employee and tenant quotas using verified identity, and enforce provider request or token budgets before generation. Add tool limits around expensive integrations. If the application has several replicas, coordinate any shared quota across them. One limit on chat messages cannot account for every resource used by an agent task.
+
+### Why do we need concurrency limits as well as rate limits?
+
+A rate limit controls arrivals over a period; concurrency limits control active work. When a dependency slows, the same arrival rate leaves more requests running simultaneously. Bound active calls and queue waiting so a slow HR integration cannot consume all the capacity needed by other workflows.
+
+### What should happen when a tool call times out?
+
+Distinguish a failed operation from an unknown outcome. A read may be eligible for a bounded retry within the task deadline. A write may already have succeeded, so reconcile it using its operation identifier or retry only through an idempotent backend contract. Report the unresolved state rather than claiming success or encouraging a duplicate submission.
+
 ### Should we log every prompt and tool result?
 
 Collect the metadata needed to reconstruct decisions first. Full content can contain employee or business-sensitive information, so give it an explicit purpose, access policy, redaction strategy, and retention period. Never include credentials or bearer tokens in routine logs.
 
 ### Which changes should trigger evaluations?
 
-Changes to prompts, models, tool contracts, retrieval, routing, cache policy, memory behavior, and authorization can affect the assistant's behavior. Run the relevant tests on each change, including allowed actions, denied actions, approval requirements, and resulting business state. An identity check is useful, but it is only one part of the suite.
+Changes to prompts, models, tool contracts, retrieval, routing, cache policy, memory behavior, and authorization can affect the assistant's behavior. Run the relevant tests on each change, including allowed actions, denied actions, approval requirements, and resulting business state. Changes to rate limits, concurrency, deadlines, and retry policies also need load and failure tests. An identity check is useful, but it is only one part of the suite.
